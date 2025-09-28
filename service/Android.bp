@@ -1,0 +1,11 @@
+filegroup {
+    name: "services.built-in",
+    srcs: [
+        "src/main/java/**/*.java",
+        "src/main/java/**/*.aidl",
+    ],
+    path: "src/main/java",
+    visibility: [
+        "//frameworks/base/services:__subpackages__",
+    ]
+}
