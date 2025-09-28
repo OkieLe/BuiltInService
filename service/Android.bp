@@ -1,0 +1,10 @@
+filegroup {
+    name: "services.built-in",
+    srcs: [
+        "src/main/java/**/*.java",
+    ],
+    path: "src/main/java",
+    visibility: [
+        "//frameworks/base/services/core",
+    ]
+}

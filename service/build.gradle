@@ -1,0 +1,31 @@
+plugins {
+    alias(libs.plugins.android.library)
+}
+
+android {
+    namespace 'ai.brain.lxing.service'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 35
+
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    compileOnly(files("$rootDir/prebuilts/shared/services.jar"))
+    implementation libs.appcompat
+    implementation libs.material
+}
