@@ -7,7 +7,8 @@ public final class BuiltInContracts {
         public static final String ID = "VirtualDisplay";
         public static final String ACTION_ATTACH = "attach";
         public static final String ARG_PARENT_SC = "parent";
-        public static final String ARG_DISPLAY_ID = "display";
         public static final String ACTION_DETACH = "detach";
+        public static final String ACTION_REPARENT = "reparent";
+        public static final String ACTION_RESET = "reset";
     }
 }

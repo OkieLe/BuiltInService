@@ -1,7 +1,5 @@
 package io.github.ole.builtin;
 
-import static android.view.Display.DEFAULT_DISPLAY;
-
 import android.annotation.NonNull;
 import android.content.Context;
 import android.graphics.PixelFormat;
@@ -10,7 +8,6 @@ import android.hardware.display.VirtualDisplay;
 import android.hardware.display.VirtualDisplayConfig;
 import android.os.Bundle;
 import android.os.Handler;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.Surface;
 import android.view.SurfaceControl;
@@ -28,7 +25,9 @@ public final class VirtualDisplayController implements Controller {
     private static final String TAG = BuiltInService.TAG;
     private static final List<String> ACTIONS = List.of(
             BuiltInContracts.VirtualDisplay.ACTION_ATTACH,
-            BuiltInContracts.VirtualDisplay.ACTION_DETACH
+            BuiltInContracts.VirtualDisplay.ACTION_DETACH,
+            BuiltInContracts.VirtualDisplay.ACTION_REPARENT,
+            BuiltInContracts.VirtualDisplay.ACTION_RESET
     );
     private final Context mContext;
     private final Handler mHandler;
@@ -37,7 +36,9 @@ public final class VirtualDisplayController implements Controller {
     private DisplayManager mDisplayManager;
 
     private SurfaceControl mDisplayControl;
+    private SurfaceHolder mDisplayHolder;
     private SurfaceControl mMirrorSurface;
+    private VirtualDisplay mVirtualDisplay;
 
     VirtualDisplayController(Context context) {
         mContext = context;
@@ -48,6 +49,25 @@ public final class VirtualDisplayController implements Controller {
     public void onStart() {
         mWindowManager = mContext.getSystemService(WindowManager.class);
         mDisplayManager = mContext.getSystemService(DisplayManager.class);
+        DisplayManager.DisplayListener listener = new DisplayManager.DisplayListener() {
+            @Override
+            public void onDisplayAdded(int displayId) {
+                Slogf.d(TAG, "onDisplayAdded(" + displayId + ")");
+            }
+
+            @Override
+            public void onDisplayRemoved(int displayId) {
+                Slogf.v(TAG, "onDisplayRemoved(" + displayId + ")");
+            }
+
+            @Override
+            public void onDisplayChanged(int displayId) {
+                Slogf.v(TAG, "onDisplayChanged(" + displayId + ")");
+            }
+        };
+
+        Slogf.v(TAG, "Registering listener " + listener);
+        mDisplayManager.registerDisplayListener(listener, null);
     }
 
     @Override
@@ -68,13 +88,21 @@ public final class VirtualDisplayController implements Controller {
             case BuiltInContracts.VirtualDisplay.ACTION_ATTACH: {
                 SurfaceControl parent = args.getParcelable(
                         BuiltInContracts.VirtualDisplay.ARG_PARENT_SC, SurfaceControl.class);
-                int displayId = args.getInt(
-                        BuiltInContracts.VirtualDisplay.ARG_DISPLAY_ID, DEFAULT_DISPLAY);
-                attachEmbeddedSurfaceControl(parent, displayId);
+                attachDisplayMirror(parent);
                 return true;
             }
             case BuiltInContracts.VirtualDisplay.ACTION_DETACH: {
-                tearDownEmbeddedSurfaceControl();
+                detachDisplayMirror();
+                return true;
+            }
+            case BuiltInContracts.VirtualDisplay.ACTION_REPARENT: {
+                Surface parent = args.getParcelable(
+                        BuiltInContracts.VirtualDisplay.ARG_PARENT_SC, Surface.class);
+                reparentVirtualDisplay(parent);
+                return true;
+            }
+            case BuiltInContracts.VirtualDisplay.ACTION_RESET: {
+                reparentVirtualDisplay(mDisplayHolder.getSurface());
                 return true;
             }
             default: {
@@ -84,21 +112,25 @@ public final class VirtualDisplayController implements Controller {
         }
     }
 
-    private void attachEmbeddedSurfaceControl(SurfaceControl parentSc, int displayId) {
-        mHandler.post(() -> {
-            if (displayId != DEFAULT_DISPLAY && mDisplayControl != null) {
+    private void attachDisplayMirror(SurfaceControl parentSc) {
+        if (mDisplayHolder == null || mDisplayControl == null) {
+            Slogf.w(TAG, "No surface view to create display");
+            return;
+        }
+        if (mVirtualDisplay != null) {
+            mHandler.post(() -> {
                 mMirrorSurface = SurfaceControl.mirrorSurface(mDisplayControl);
-                Log.i(TAG, "Mirror of display surface " + mMirrorSurface);
+                Slogf.i(TAG, "Mirror of display surface " + mMirrorSurface);
                 if (mMirrorSurface != null && mMirrorSurface.isValid()) {
                     new SurfaceControl.Transaction().show(mMirrorSurface)
                             .reparent(mMirrorSurface, parentSc)
                             .apply();
                 }
-            }
-        });
+            });
+        }
     }
 
-    private void tearDownEmbeddedSurfaceControl() {
+    private void detachDisplayMirror() {
         if (mMirrorSurface != null) {
             new SurfaceControl.Transaction().remove(mMirrorSurface).apply();
             mMirrorSurface = null;
@@ -118,7 +150,8 @@ public final class VirtualDisplayController implements Controller {
             public void surfaceCreated(@NonNull SurfaceHolder holder) {
                 Slogf.i(TAG, "surfaceCreated");
                 mDisplayControl = surfaceView.getSurfaceControl();
-                addVirtualDisplay(holder.getSurface());
+                mDisplayHolder = holder;
+                addVirtualDisplay(mDisplayHolder.getSurface());
             }
 
             @Override
@@ -129,6 +162,8 @@ public final class VirtualDisplayController implements Controller {
             @Override
             public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
                 Slogf.i(TAG, "surfaceDestroyed");
+                destroyVirtualDisplay();
+                mDisplayHolder = null;
                 mDisplayControl = null;
             }
         });
@@ -145,32 +180,12 @@ public final class VirtualDisplayController implements Controller {
         );
         layoutParams.privateFlags = WindowManager.LayoutParams.SYSTEM_FLAG_SHOW_FOR_ALL_USERS;
         layoutParams.setTitle("display-container");
-        layoutParams.x = -800;
+        layoutParams.x = -640;
         layoutParams.gravity = Gravity.END | Gravity.BOTTOM;
         mWindowManager.addView(surfaceView, layoutParams);
     }
 
     private void addVirtualDisplay(Surface surface) {
-        DisplayManager.DisplayListener listener = new DisplayManager.DisplayListener() {
-            @Override
-            public void onDisplayAdded(int displayId) {
-                Slogf.d(TAG, "onDisplayAdded(" + displayId + ")");
-            }
-
-            @Override
-            public void onDisplayRemoved(int displayId) {
-                Slogf.v(TAG, "onDisplayRemoved(" + displayId + ")");
-            }
-
-            @Override
-            public void onDisplayChanged(int displayId) {
-                Slogf.v(TAG, "onDisplayChanged(" + displayId + ")");
-            }
-        };
-
-        Slogf.v(TAG, "Registering listener " + listener);
-        mDisplayManager.registerDisplayListener(listener, null);
-
         int flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_ROTATES_WITH_CONTENT
@@ -184,18 +199,31 @@ public final class VirtualDisplayController implements Controller {
 
         Slogf.d(TAG, "Creating display 'virtual-display'");
         VirtualDisplayConfig config = new VirtualDisplayConfig.Builder(
-                "virtual-display", 840, 1200, 420
-        )
+                "virtual-display", 840, 1200, 420)
                 .setSurface(surface)
                 .setFlags(flags)
                 .build();
-        VirtualDisplay virtualDisplay = mDisplayManager.createVirtualDisplay(config);
+        mVirtualDisplay = mDisplayManager.createVirtualDisplay(config);
 
-        if (virtualDisplay == null) {
+        if (mVirtualDisplay == null) {
             Slogf.i(TAG, "Failed to create display");
         } else {
-            int displayId = virtualDisplay.getDisplay().getDisplayId();
+            int displayId = mVirtualDisplay.getDisplay().getDisplayId();
             Slogf.i(TAG, "Created display: " + displayId);
+        }
+    }
+
+    private void reparentVirtualDisplay(Surface surface) {
+        if (mVirtualDisplay != null) {
+            mVirtualDisplay.setSurface(surface);
+        }
+    }
+
+    private void destroyVirtualDisplay() {
+        if (mVirtualDisplay != null) {
+            mVirtualDisplay.setSurface(null);
+            mVirtualDisplay.release();
+            mVirtualDisplay = null;
         }
     }
 }
