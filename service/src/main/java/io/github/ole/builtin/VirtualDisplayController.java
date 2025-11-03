@@ -194,7 +194,6 @@ public final class VirtualDisplayController implements Controller {
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_ALWAYS_UNLOCKED
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_FOCUS
-                | DisplayManager.VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS;
 
         Slogf.d(TAG, "Creating display 'virtual-display'");
