@@ -2,6 +2,7 @@ package io.github.ole.builtin;
 
 import android.annotation.NonNull;
 import android.content.Context;
+import android.os.Binder;
 import android.os.Bundle;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
@@ -31,6 +32,7 @@ public class BuiltInService extends SystemService {
 
         @Override
         public boolean performAction(String controller, String action, Bundle args) throws RemoteException {
+            Binder.clearCallingIdentity();
             Controller targetController = mControllers.get(controller);
             if (targetController != null) {
                 if (!targetController.supportsAction(action)) {

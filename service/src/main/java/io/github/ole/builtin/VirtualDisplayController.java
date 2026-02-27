@@ -24,6 +24,8 @@ import java.util.List;
 public final class VirtualDisplayController implements Controller {
     private static final String TAG = BuiltInService.TAG;
     private static final List<String> ACTIONS = List.of(
+            BuiltInContracts.VirtualDisplay.ACTION_CREATE,
+            BuiltInContracts.VirtualDisplay.ACTION_DESTROY,
             BuiltInContracts.VirtualDisplay.ACTION_ATTACH,
             BuiltInContracts.VirtualDisplay.ACTION_DETACH,
             BuiltInContracts.VirtualDisplay.ACTION_REPARENT,
@@ -85,11 +87,21 @@ public final class VirtualDisplayController implements Controller {
     @Override
     public boolean apply(String action, Bundle args) {
         switch (action) {
+            case BuiltInContracts.VirtualDisplay.ACTION_CREATE: {
+                if (mVirtualDisplay != null) {
+                    return false;
+                }
+                addVirtualDisplay(mDisplayHolder.getSurface());
+                return mVirtualDisplay != null;
+            }
+            case BuiltInContracts.VirtualDisplay.ACTION_DESTROY: {
+                destroyVirtualDisplay();
+                return true;
+            }
             case BuiltInContracts.VirtualDisplay.ACTION_ATTACH: {
                 SurfaceControl parent = args.getParcelable(
                         BuiltInContracts.VirtualDisplay.ARG_PARENT_SC, SurfaceControl.class);
-                attachDisplayMirror(parent);
-                return true;
+                return attachDisplayMirror(parent);
             }
             case BuiltInContracts.VirtualDisplay.ACTION_DETACH: {
                 detachDisplayMirror();
@@ -98,12 +110,13 @@ public final class VirtualDisplayController implements Controller {
             case BuiltInContracts.VirtualDisplay.ACTION_REPARENT: {
                 Surface parent = args.getParcelable(
                         BuiltInContracts.VirtualDisplay.ARG_PARENT_SC, Surface.class);
-                reparentVirtualDisplay(parent);
-                return true;
+                return reparentVirtualDisplay(parent);
             }
             case BuiltInContracts.VirtualDisplay.ACTION_RESET: {
-                reparentVirtualDisplay(mDisplayHolder.getSurface());
-                return true;
+                if (mDisplayHolder == null) {
+                    return false;
+                }
+                return reparentVirtualDisplay(mDisplayHolder.getSurface());
             }
             default: {
                 Slogf.d(TAG, "Noop for action " + action);
@@ -112,10 +125,10 @@ public final class VirtualDisplayController implements Controller {
         }
     }
 
-    private void attachDisplayMirror(SurfaceControl parentSc) {
+    private boolean attachDisplayMirror(SurfaceControl parentSc) {
         if (mDisplayHolder == null || mDisplayControl == null) {
             Slogf.w(TAG, "No surface view to create display");
-            return;
+            return false;
         }
         if (mVirtualDisplay != null) {
             mHandler.post(() -> {
@@ -127,7 +140,9 @@ public final class VirtualDisplayController implements Controller {
                             .apply();
                 }
             });
+            return true;
         }
+        return false;
     }
 
     private void detachDisplayMirror() {
@@ -151,7 +166,6 @@ public final class VirtualDisplayController implements Controller {
                 Slogf.i(TAG, "surfaceCreated");
                 mDisplayControl = surfaceView.getSurfaceControl();
                 mDisplayHolder = holder;
-                addVirtualDisplay(mDisplayHolder.getSurface());
             }
 
             @Override
@@ -212,10 +226,12 @@ public final class VirtualDisplayController implements Controller {
         }
     }
 
-    private void reparentVirtualDisplay(Surface surface) {
+    private boolean reparentVirtualDisplay(Surface surface) {
         if (mVirtualDisplay != null) {
             mVirtualDisplay.setSurface(surface);
+            return true;
         }
+        return false;
     }
 
     private void destroyVirtualDisplay() {

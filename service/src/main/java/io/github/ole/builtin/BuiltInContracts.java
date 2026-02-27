@@ -5,6 +5,8 @@ public final class BuiltInContracts {
 
     public static final class VirtualDisplay {
         public static final String ID = "VirtualDisplay";
+        public static final String ACTION_CREATE = "create";
+        public static final String ACTION_DESTROY = "destroy";
         public static final String ACTION_ATTACH = "attach";
         public static final String ARG_PARENT_SC = "parent";
         public static final String ACTION_DETACH = "detach";
